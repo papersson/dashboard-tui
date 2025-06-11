@@ -1,0 +1,23 @@
+CLAUDE.md
+.claude/
+/references
+
+# Zig build artifacts
+zig-cache/
+zig-out/
+.zig-cache/
+
+# Build artifacts
+build/
+build-*/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Debug files
+*.pdb

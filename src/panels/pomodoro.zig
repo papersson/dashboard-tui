@@ -1,0 +1,230 @@
+const std = @import("std");
+const Screen = @import("../terminal/screen.zig").Screen;
+const Color = @import("../terminal/screen.zig").Color;
+const Event = @import("../terminal/input.zig").Event;
+const Key = @import("../terminal/input.zig").Key;
+const Rect = @import("../ui/layout.zig").Rect;
+const Theme = @import("../ui/theme.zig").Theme;
+
+pub const PomodoroPanel = struct {
+    allocator: std.mem.Allocator,
+    focused: bool = false,
+    state: State = .idle,
+    duration: i64 = 25 * 60 * 1000, // 25 minutes in milliseconds
+    elapsed: i64 = 0,
+    start_time: i64 = 0,
+    cycles: u32 = 0,
+    
+    const State = enum {
+        idle,
+        work,
+        short_break,
+        long_break,
+    };
+    
+    pub fn init(allocator: std.mem.Allocator) !PomodoroPanel {
+        return PomodoroPanel{
+            .allocator = allocator,
+        };
+    }
+    
+    pub fn deinit(self: *PomodoroPanel) void {
+        _ = self;
+    }
+    
+    pub fn handleEvent(self: *PomodoroPanel, event: Event) !bool {
+        switch (event) {
+            .key => |key| switch (key) {
+                .char => |c| switch (c) {
+                    ' ' => {
+                        self.toggleTimer();
+                        return true;
+                    },
+                    'r', 'R' => {
+                        self.resetTimer();
+                        return true;
+                    },
+                    's', 'S' => {
+                        self.skipTimer();
+                        return true;
+                    },
+                    else => {},
+                },
+                else => {},
+            },
+            else => {},
+        }
+        return false;
+    }
+    
+    pub fn update(self: *PomodoroPanel) void {
+        if (self.state == .idle) return;
+        
+        const now = std.time.milliTimestamp();
+        self.elapsed = now - self.start_time;
+        
+        // Check if timer completed
+        if (self.elapsed >= self.duration) {
+            self.completeTimer();
+        }
+    }
+    
+    pub fn render(self: *PomodoroPanel, screen: *Screen, bounds: Rect, theme: Theme) !void {
+        // Update timer
+        self.update();
+        
+        // Draw border
+        screen.drawBox(bounds.x, bounds.y, bounds.width, bounds.height,
+                      if (self.focused) theme.accent else theme.border, theme.panel_bg);
+        
+        // Title
+        const title = " POMODORO ";
+        const title_x = bounds.x + (bounds.width - @as(u16, @intCast(title.len))) / 2;
+        screen.writeText(title_x, bounds.y, title, theme.text_primary, theme.panel_bg, .{ .bold = true });
+        
+        // Timer display
+        const remaining = self.duration - self.elapsed;
+        const minutes = @divFloor(remaining, 60000);
+        const seconds = @divFloor(@mod(remaining, 60000), 1000);
+        
+        var timer_buf: [16]u8 = undefined;
+        const timer_text = std.fmt.bufPrint(&timer_buf, "{d:0>2}:{d:0>2}", .{ minutes, seconds }) catch "??:??";
+        
+        // Large timer display
+        const timer_y = bounds.y + bounds.height / 2 - 1;
+        const timer_x = bounds.x + (bounds.width - @as(u16, @intCast(timer_text.len))) / 2;
+        
+        // Draw timer with larger appearance by using box drawing
+        if (bounds.width >= 10 and bounds.height >= 5) {
+            // Draw timer background
+            var i: u16 = 0;
+            while (i < timer_text.len) : (i += 1) {
+                screen.setCell(timer_x + i, timer_y, .{
+                    .char = timer_text[i],
+                    .fg = switch (self.state) {
+                        .work => theme.accent,
+                        .short_break => theme.success,
+                        .long_break => theme.medium_priority,
+                        .idle => theme.text_dim,
+                    },
+                    .bg = theme.panel_bg,
+                    .style = .{ .bold = true },
+                });
+            }
+        }
+        
+        // State indicator
+        const state_text = switch (self.state) {
+            .idle => "⏸  READY",
+            .work => "▶  FOCUS TIME",
+            .short_break => "☕ SHORT BREAK",
+            .long_break => "🌴 LONG BREAK",
+        };
+        
+        const state_x = bounds.x + (bounds.width - @as(u16, @intCast(state_text.len))) / 2;
+        screen.writeText(state_x, timer_y + 2, state_text, theme.text_secondary, theme.panel_bg, .{});
+        
+        // Cycle counter
+        var cycle_buf: [32]u8 = undefined;
+        const cycle_text = std.fmt.bufPrint(&cycle_buf, "Cycles: {d}", .{self.cycles}) catch "Cycles: ?";
+        const cycle_x = bounds.x + (bounds.width - @as(u16, @intCast(cycle_text.len))) / 2;
+        screen.writeText(cycle_x, timer_y + 3, cycle_text, theme.text_dim, theme.panel_bg, .{});
+        
+        // Progress bar
+        if (bounds.height > 8) {
+            const progress = if (self.duration > 0)
+                @as(f32, @floatFromInt(self.elapsed)) / @as(f32, @floatFromInt(self.duration))
+            else 0.0;
+            
+            const bar_width = @min(bounds.width - 4, 30);
+            const bar_x = bounds.x + (bounds.width - bar_width) / 2;
+            const bar_y = timer_y - 2;
+            
+            self.drawProgressBar(screen, bar_x, bar_y, bar_width, progress, theme);
+        }
+        
+        // Controls
+        if (bounds.height > 10) {
+            const controls = "[Space] Start/Pause  [R] Reset  [S] Skip";
+            const controls_x = bounds.x + (bounds.width - @as(u16, @intCast(controls.len))) / 2;
+            screen.writeText(controls_x, bounds.y + bounds.height - 2, controls, theme.text_dim, theme.panel_bg, .{});
+        }
+    }
+    
+    fn toggleTimer(self: *PomodoroPanel) void {
+        switch (self.state) {
+            .idle => {
+                self.startWork();
+            },
+            .work, .short_break, .long_break => {
+                // Pause by going to idle but keeping elapsed time
+                self.state = .idle;
+            },
+        }
+    }
+    
+    fn startWork(self: *PomodoroPanel) void {
+        self.state = .work;
+        self.duration = 25 * 60 * 1000; // 25 minutes
+        self.elapsed = 0;
+        self.start_time = std.time.milliTimestamp();
+    }
+    
+    fn startShortBreak(self: *PomodoroPanel) void {
+        self.state = .short_break;
+        self.duration = 5 * 60 * 1000; // 5 minutes
+        self.elapsed = 0;
+        self.start_time = std.time.milliTimestamp();
+    }
+    
+    fn startLongBreak(self: *PomodoroPanel) void {
+        self.state = .long_break;
+        self.duration = 15 * 60 * 1000; // 15 minutes
+        self.elapsed = 0;
+        self.start_time = std.time.milliTimestamp();
+    }
+    
+    fn resetTimer(self: *PomodoroPanel) void {
+        self.state = .idle;
+        self.elapsed = 0;
+        self.cycles = 0;
+    }
+    
+    fn skipTimer(self: *PomodoroPanel) void {
+        self.completeTimer();
+    }
+    
+    fn completeTimer(self: *PomodoroPanel) void {
+        switch (self.state) {
+            .work => {
+                self.cycles += 1;
+                if (@mod(self.cycles, 4) == 0) {
+                    self.startLongBreak();
+                } else {
+                    self.startShortBreak();
+                }
+            },
+            .short_break, .long_break => {
+                self.startWork();
+            },
+            .idle => {},
+        }
+    }
+    
+    fn drawProgressBar(self: *PomodoroPanel, screen: *Screen, x: u16, y: u16, width: u16, progress: f32, theme: Theme) void {
+        _ = self;
+        
+        const filled = @as(u16, @intFromFloat(@as(f32, @floatFromInt(width)) * progress));
+        var i: u16 = 0;
+        while (i < width) : (i += 1) {
+            const char: u21 = if (i < filled) '█' else '░';
+            const color = if (i < filled) theme.accent else theme.border;
+            screen.setCell(x + i, y, .{
+                .char = char,
+                .fg = color,
+                .bg = theme.panel_bg,
+                .style = .{},
+            });
+        }
+    }
+};

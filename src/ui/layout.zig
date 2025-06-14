@@ -89,7 +89,7 @@ pub const Layout = struct {
         };
     }
     
-    fn findPanel(self: *Layout, node: *Node, id: []const u8) ?*Node {
+    pub fn findPanel(self: *Layout, node: *Node, id: []const u8) ?*Node {
         switch (node.*) {
             .panel => |panel| {
                 if (std.mem.eql(u8, panel.id, id)) return node;

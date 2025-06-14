@@ -4,21 +4,26 @@ const Color = @import("../terminal/screen.zig").Color;
 const Event = @import("../terminal/input.zig").Event;
 const Rect = @import("../ui/layout.zig").Rect;
 const Theme = @import("../ui/theme.zig").Theme;
+const SystemMonitor = @import("../system/monitor.zig").SystemMonitor;
 
 pub const SystemMonitorPanel = struct {
     allocator: std.mem.Allocator,
     focused: bool = false,
     cpu_usage: f32 = 0.0,
     memory_usage: f32 = 0.0,
+    memory_total: u64 = 0,
+    memory_used: u64 = 0,
+    process_count: u32 = 0,
     cpu_history: std.ArrayList(f32),
     memory_history: std.ArrayList(f32),
     update_timer: i64 = 0,
+    system_monitor: SystemMonitor,
     
     pub fn init(allocator: std.mem.Allocator) !SystemMonitorPanel {
         var cpu_history = std.ArrayList(f32).init(allocator);
         var memory_history = std.ArrayList(f32).init(allocator);
         
-        // Initialize with some dummy data for now
+        // Initialize with zeros
         var i: usize = 0;
         while (i < 30) : (i += 1) {
             try cpu_history.append(0.0);
@@ -29,6 +34,7 @@ pub const SystemMonitorPanel = struct {
             .allocator = allocator,
             .cpu_history = cpu_history,
             .memory_history = memory_history,
+            .system_monitor = SystemMonitor.init(allocator),
         };
     }
     
@@ -48,10 +54,17 @@ pub const SystemMonitorPanel = struct {
         if (now - self.update_timer < 1000) return; // Update every second
         self.update_timer = now;
         
-        // Generate some dummy data for visualization
-        const random = std.crypto.random;
-        self.cpu_usage = 0.3 + @as(f32, @floatFromInt(random.int(u8))) / 255.0 * 0.4; // 30-70%
-        self.memory_usage = 0.5 + @as(f32, @floatFromInt(random.int(u8))) / 255.0 * 0.3; // 50-80%
+        // Get real system stats
+        const stats = self.system_monitor.getStats() catch {
+            // Fall back to previous values on error
+            return;
+        };
+        
+        self.cpu_usage = stats.cpu_usage;
+        self.memory_usage = stats.memory_usage;
+        self.memory_total = stats.memory_total;
+        self.memory_used = stats.memory_used;
+        self.process_count = stats.process_count;
         
         // Update history
         if (self.cpu_history.items.len >= 30) {
@@ -96,10 +109,26 @@ pub const SystemMonitorPanel = struct {
         const mem_text = std.fmt.bufPrint(&mem_text_buf, "{d:>3.0}%", .{self.memory_usage * 100}) catch "???%";
         screen.writeText(bounds.x + 23, bounds.y + 3, mem_text, theme.text_primary, theme.panel_bg, .{});
         
+        // Process count
+        if (bounds.height > 5) {
+            var proc_buf: [32]u8 = undefined;
+            const proc_text = std.fmt.bufPrint(&proc_buf, "Processes: {d}", .{self.process_count}) catch "Processes: ?";
+            screen.writeText(bounds.x + 2, bounds.y + 4, proc_text, theme.text_secondary, theme.panel_bg, .{});
+        }
+        
+        // Memory details
+        if (bounds.height > 6 and self.memory_total > 0) {
+            var mem_detail_buf: [64]u8 = undefined;
+            const gb_total = @as(f32, @floatFromInt(self.memory_total)) / (1024.0 * 1024.0 * 1024.0);
+            const gb_used = @as(f32, @floatFromInt(self.memory_used)) / (1024.0 * 1024.0 * 1024.0);
+            const mem_detail = std.fmt.bufPrint(&mem_detail_buf, "RAM: {d:.1}/{d:.1} GB", .{ gb_used, gb_total }) catch "";
+            screen.writeText(bounds.x + 2, bounds.y + 5, mem_detail, theme.text_secondary, theme.panel_bg, .{});
+        }
+        
         // Draw graphs
-        if (bounds.height > 10) {
-            const graph_y = bounds.y + 5;
-            const graph_height = @min(bounds.height - 8, 10);
+        if (bounds.height > 12) {
+            const graph_y = bounds.y + 7;
+            const graph_height = @min(bounds.height - 10, 10);
             const graph_width = bounds.width - 4;
             
             screen.writeText(bounds.x + 2, graph_y, "CPU History:", theme.text_secondary, theme.panel_bg, .{});

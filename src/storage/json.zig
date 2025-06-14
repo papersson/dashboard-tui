@@ -30,6 +30,23 @@ pub const JsonValue = union(enum) {
     }
 };
 
+pub const ParseError = error{
+    UnexpectedEnd,
+    UnexpectedCharacter,
+    InvalidNull,
+    InvalidBool,
+    ExpectedQuote,
+    UnterminatedString,
+    InvalidNumber,
+    ExpectedBracket,
+    ExpectedCommaOrBracket,
+    ExpectedBrace,
+    ExpectedColon,
+    ExpectedCommaOrBrace,
+    OutOfMemory,
+    InvalidCharacter,
+};
+
 pub const Parser = struct {
     allocator: std.mem.Allocator,
     input: []const u8,
@@ -42,12 +59,12 @@ pub const Parser = struct {
         };
     }
     
-    pub fn parse(self: *Parser) !JsonValue {
+    pub fn parse(self: *Parser) ParseError!JsonValue {
         self.skipWhitespace();
         return try self.parseValue();
     }
     
-    fn parseValue(self: *Parser) !JsonValue {
+    fn parseValue(self: *Parser) ParseError!JsonValue {
         self.skipWhitespace();
         
         if (self.pos >= self.input.len) return error.UnexpectedEnd;
@@ -63,7 +80,7 @@ pub const Parser = struct {
         };
     }
     
-    fn parseNull(self: *Parser) !JsonValue {
+    fn parseNull(self: *Parser) ParseError!JsonValue {
         if (self.pos + 4 > self.input.len or !std.mem.eql(u8, self.input[self.pos..self.pos + 4], "null")) {
             return error.InvalidNull;
         }
@@ -71,7 +88,7 @@ pub const Parser = struct {
         return JsonValue.null;
     }
     
-    fn parseBool(self: *Parser) !JsonValue {
+    fn parseBool(self: *Parser) ParseError!JsonValue {
         if (self.pos + 4 <= self.input.len and std.mem.eql(u8, self.input[self.pos..self.pos + 4], "true")) {
             self.pos += 4;
             return JsonValue{ .bool = true };
@@ -82,7 +99,7 @@ pub const Parser = struct {
         return error.InvalidBool;
     }
     
-    fn parseString(self: *Parser) ![]const u8 {
+    fn parseString(self: *Parser) ParseError![]const u8 {
         if (self.input[self.pos] != '"') return error.ExpectedQuote;
         self.pos += 1;
         
@@ -97,7 +114,7 @@ pub const Parser = struct {
         return error.UnterminatedString;
     }
     
-    fn parseNumber(self: *Parser) !f64 {
+    fn parseNumber(self: *Parser) ParseError!f64 {
         const start = self.pos;
         
         if (self.input[self.pos] == '-') self.pos += 1;
@@ -137,10 +154,10 @@ pub const Parser = struct {
             if (self.pos == exp_start) return error.InvalidNumber;
         }
         
-        return try std.fmt.parseFloat(f64, self.input[start..self.pos]);
+        return std.fmt.parseFloat(f64, self.input[start..self.pos]) catch error.InvalidNumber;
     }
     
-    fn parseArray(self: *Parser) !std.ArrayList(JsonValue) {
+    fn parseArray(self: *Parser) ParseError!std.ArrayList(JsonValue) {
         if (self.input[self.pos] != '[') return error.ExpectedBracket;
         self.pos += 1;
         
@@ -175,7 +192,7 @@ pub const Parser = struct {
         }
     }
     
-    fn parseObject(self: *Parser) !std.StringHashMap(JsonValue) {
+    fn parseObject(self: *Parser) ParseError!std.StringHashMap(JsonValue) {
         if (self.input[self.pos] != '{') return error.ExpectedBrace;
         self.pos += 1;
         

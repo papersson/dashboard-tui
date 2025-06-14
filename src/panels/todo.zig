@@ -10,10 +10,12 @@ const Priority = @import("../models/todo.zig").Priority;
 const Status = @import("../models/todo.zig").Status;
 const Event = @import("../terminal/input.zig").Event;
 const Key = @import("../terminal/input.zig").Key;
+const TodoStore = @import("../storage/todo_store.zig").TodoStore;
 
 pub const TodoPanel = struct {
     allocator: std.mem.Allocator,
     todos: TodoList,
+    store: TodoStore,
     selected_index: usize = 0,
     scroll_offset: usize = 0,
     input_mode: InputMode = .normal,
@@ -30,18 +32,30 @@ pub const TodoPanel = struct {
     };
     
     pub fn init(allocator: std.mem.Allocator) !TodoPanel {
-        return TodoPanel{
+        var panel = TodoPanel{
             .allocator = allocator,
             .todos = TodoList.init(allocator),
+            .store = try TodoStore.init(allocator),
             .input_buffer = std.ArrayList(u8).init(allocator),
             .filter_text = try allocator.alloc(u8, 0),
         };
+        
+        // Load existing todos
+        try panel.store.load(&panel.todos);
+        
+        return panel;
     }
     
     pub fn deinit(self: *TodoPanel) void {
+        // Save todos before cleanup
+        self.store.save(&self.todos) catch |err| {
+            std.debug.print("Failed to save todos: {}\n", .{err});
+        };
+        
         self.todos.deinit();
         self.input_buffer.deinit();
         self.allocator.free(self.filter_text);
+        self.store.deinit();
     }
     
     pub fn handleEvent(self: *TodoPanel, event: Event) !bool {
@@ -144,11 +158,13 @@ pub const TodoPanel = struct {
                             .adding => {
                                 _ = try self.todos.add(text);
                                 self.todos.sortByPriority();
+                                try self.save();
                             },
                             .editing => {
                                 if (self.getSelectedTodo()) |todo| {
                                     self.allocator.free(todo.title);
                                     todo.title = try self.allocator.dupe(u8, text);
+                                    try self.save();
                                 }
                             },
                             else => {},
@@ -385,6 +401,9 @@ pub const TodoPanel = struct {
     fn toggleSelected(self: *TodoPanel) void {
         if (self.getSelectedTodo()) |todo| {
             todo.toggleComplete();
+            self.save() catch |err| {
+                std.debug.print("Failed to save after toggle: {}\n", .{err});
+            };
         }
     }
     
@@ -394,6 +413,7 @@ pub const TodoPanel = struct {
             if (self.selected_index > 0 and self.selected_index >= self.getVisibleCount()) {
                 self.selected_index -= 1;
             }
+            try self.save();
         }
     }
     
@@ -405,6 +425,9 @@ pub const TodoPanel = struct {
                 .high => .low,
             };
             self.todos.sortByPriority();
+            self.save() catch |err| {
+                std.debug.print("Failed to save after priority change: {}\n", .{err});
+            };
         }
     }
     
@@ -412,6 +435,13 @@ pub const TodoPanel = struct {
         if (self.getSelectedTodo()) |todo| {
             todo.priority = priority;
             self.todos.sortByPriority();
+            self.save() catch |err| {
+                std.debug.print("Failed to save after priority set: {}\n", .{err});
+            };
         }
+    }
+    
+    pub fn save(self: *TodoPanel) !void {
+        try self.store.save(&self.todos);
     }
 };

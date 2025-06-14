@@ -139,7 +139,8 @@ pub const Todo = struct {
     
     fn generateId(allocator: std.mem.Allocator) ![]u8 {
         var buf: [16]u8 = undefined;
-        var prng = std.Random.DefaultPrng.init(@intCast(std.time.timestamp()));
+        // Use nanoTimestamp for better randomness
+        var prng = std.Random.DefaultPrng.init(@intCast(std.time.nanoTimestamp()));
         prng.random().bytes(&buf);
         
         const hex = "0123456789abcdef";

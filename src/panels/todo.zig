@@ -230,12 +230,24 @@ pub const TodoPanel = struct {
     }
     
     pub fn render(self: *TodoPanel, screen: *Screen, bounds: Rect, theme: Theme) !void {
-        // Clear background
-        screen.fillRect(bounds.x, bounds.y, bounds.width, bounds.height, theme.panel_bg);
+        // Fill solid background
+        const bg_color = Color{ .r = 20, .g = 30, .b = 40 }; // Dark blue background
+        var y: u16 = bounds.y;
+        while (y < bounds.y + bounds.height) : (y += 1) {
+            var x: u16 = bounds.x;
+            while (x < bounds.x + bounds.width) : (x += 1) {
+                screen.setCell(x, y, .{
+                    .char = ' ',
+                    .fg = theme.text_primary,
+                    .bg = bg_color,
+                    .style = .{},
+                });
+            }
+        }
         
         // Draw border
         const border_color = if (self.focused) theme.border_active else theme.border;
-        screen.drawBox(bounds.x, bounds.y, bounds.width, bounds.height, border_color, theme.panel_bg);
+        screen.drawBox(bounds.x, bounds.y, bounds.width, bounds.height, border_color, bg_color);
         
         // Draw title
         const title = "TODO LIST";
@@ -249,7 +261,7 @@ pub const TodoPanel = struct {
         
         var title_buf: [64]u8 = undefined;
         const title_text = std.fmt.bufPrint(&title_buf, "{s} [{d}/{d}]", .{ title, completed_count, self.todos.todos.items.len }) catch title;
-        screen.writeText(bounds.x + 2, bounds.y, title_text, theme.accent, theme.panel_bg, .{ .bold = true });
+        screen.writeText(bounds.x + 2, bounds.y, title_text, theme.accent, bg_color, .{ .bold = true });
         
         // Draw todos
         const content_bounds = bounds.shrink(1);
@@ -279,18 +291,18 @@ pub const TodoPanel = struct {
         }
         
         // Render visible todos
-        var y = content_bounds.y + 1;
+        var todo_y = content_bounds.y + 1;
         var i = self.scroll_offset;
-        while (i < visible_todos.items.len and y < content_bounds.y + content_bounds.height - 1) : ({
+        while (i < visible_todos.items.len and todo_y < content_bounds.y + content_bounds.height - 1) : ({
             i += 1;
-            y += 1;
+            todo_y += 1;
         }) {
             const todo = visible_todos.items[i];
             const is_selected = i == self.selected_index;
             
             // Background for selected item
             if (is_selected) {
-                screen.fillRect(content_bounds.x, y, content_bounds.width, 1, theme.accent_dim);
+                screen.fillRect(content_bounds.x, todo_y, content_bounds.width, 1, theme.accent_dim);
             }
             
             // Priority symbol
@@ -299,7 +311,7 @@ pub const TodoPanel = struct {
                 .medium => theme.medium_priority,
                 .low => theme.low_priority,
             };
-            screen.writeText(content_bounds.x + 1, y, todo.priority.symbol(), priority_color, if (is_selected) theme.accent_dim else theme.panel_bg, .{});
+            screen.writeText(content_bounds.x + 1, todo_y, todo.priority.symbol(), priority_color, if (is_selected) theme.accent_dim else bg_color, .{});
             
             // Status indicator
             const status_char: []const u8 = switch (todo.status) {
@@ -308,19 +320,19 @@ pub const TodoPanel = struct {
                 .pending => " ",
             };
             const status_color = if (todo.status == .completed) theme.success else theme.text_primary;
-            screen.writeText(content_bounds.x + 3, y, status_char, status_color, if (is_selected) theme.accent_dim else theme.panel_bg, .{});
+            screen.writeText(content_bounds.x + 3, todo_y, status_char, status_color, if (is_selected) theme.accent_dim else bg_color, .{});
             
             // Todo title
             const text_color = if (todo.status == .completed) theme.text_dim else theme.text_primary;
             const text_style = Style{ .dim = todo.status == .completed };
             const max_width = content_bounds.width - 6;
             const todo_title = if (todo.title.len > max_width) todo.title[0..max_width] else todo.title;
-            screen.writeText(content_bounds.x + 5, y, todo_title, text_color, if (is_selected) theme.accent_dim else theme.panel_bg, text_style);
+            screen.writeText(content_bounds.x + 5, todo_y, todo_title, text_color, if (is_selected) theme.accent_dim else bg_color, text_style);
             
             // Due date indicator if overdue
             if (todo.isOverdue()) {
                 const overdue_text = "!";
-                screen.writeText(content_bounds.x + content_bounds.width - 2, y, overdue_text, theme.@"error", if (is_selected) theme.accent_dim else theme.panel_bg, .{ .bold = true });
+                screen.writeText(content_bounds.x + content_bounds.width - 2, todo_y, overdue_text, theme.@"error", if (is_selected) theme.accent_dim else bg_color, .{ .bold = true });
             }
         }
         
@@ -328,22 +340,22 @@ pub const TodoPanel = struct {
         const input_y = content_bounds.y + content_bounds.height - 1;
         switch (self.input_mode) {
             .adding => {
-                screen.writeText(content_bounds.x + 1, input_y, "[+] ", theme.accent, theme.panel_bg, .{});
-                screen.writeText(content_bounds.x + 5, input_y, self.input_buffer.items, theme.text_primary, theme.panel_bg, .{});
+                screen.writeText(content_bounds.x + 1, input_y, "[+] ", theme.accent, bg_color, .{});
+                screen.writeText(content_bounds.x + 5, input_y, self.input_buffer.items, theme.text_primary, bg_color, .{});
                 screen.cursor_visible = true;
                 screen.cursor_x = content_bounds.x + 5 + @as(u16, @intCast(self.input_buffer.items.len));
                 screen.cursor_y = input_y;
             },
             .editing => {
-                screen.writeText(content_bounds.x + 1, input_y, "[~] ", theme.accent, theme.panel_bg, .{});
-                screen.writeText(content_bounds.x + 5, input_y, self.input_buffer.items, theme.text_primary, theme.panel_bg, .{});
+                screen.writeText(content_bounds.x + 1, input_y, "[~] ", theme.accent, bg_color, .{});
+                screen.writeText(content_bounds.x + 5, input_y, self.input_buffer.items, theme.text_primary, bg_color, .{});
                 screen.cursor_visible = true;
                 screen.cursor_x = content_bounds.x + 5 + @as(u16, @intCast(self.input_buffer.items.len));
                 screen.cursor_y = input_y;
             },
             .filtering => {
-                screen.writeText(content_bounds.x + 1, input_y, "[/] ", theme.accent, theme.panel_bg, .{});
-                screen.writeText(content_bounds.x + 5, input_y, self.input_buffer.items, theme.text_primary, theme.panel_bg, .{});
+                screen.writeText(content_bounds.x + 1, input_y, "[/] ", theme.accent, bg_color, .{});
+                screen.writeText(content_bounds.x + 5, input_y, self.input_buffer.items, theme.text_primary, bg_color, .{});
                 screen.cursor_visible = true;
                 screen.cursor_x = content_bounds.x + 5 + @as(u16, @intCast(self.input_buffer.items.len));
                 screen.cursor_y = input_y;
@@ -352,9 +364,9 @@ pub const TodoPanel = struct {
                 if (self.filter_text.len > 0) {
                     var filter_buf: [64]u8 = undefined;
                     const filter_display = std.fmt.bufPrint(&filter_buf, "Filter: {s}", .{self.filter_text}) catch "";
-                    screen.writeText(content_bounds.x + 1, input_y, filter_display, theme.text_secondary, theme.panel_bg, .{});
+                    screen.writeText(content_bounds.x + 1, input_y, filter_display, theme.text_secondary, bg_color, .{});
                 } else {
-                    screen.writeText(content_bounds.x + 1, input_y, "[a] Add  [d] Delete  [p] Priority  [f] Filter", theme.text_dim, theme.panel_bg, .{});
+                    screen.writeText(content_bounds.x + 1, input_y, "[a] Add  [d] Delete  [p] Priority  [f] Filter", theme.text_dim, bg_color, .{});
                 }
             },
         }

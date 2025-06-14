@@ -10,7 +10,7 @@ const Layout = @import("ui/layout.zig").Layout;
 const Rect = @import("ui/layout.zig").Rect;
 const Theme = @import("ui/theme.zig").Theme;
 const TodoPanel = @import("panels/todo.zig").TodoPanel;
-const SystemMonitorPanel = @import("panels/system_monitor.zig").SystemMonitorPanel;
+const PatrickPanel = @import("panels/patrick.zig").PatrickPanel;
 const PomodoroPanel = @import("panels/pomodoro.zig").PomodoroPanel;
 const NotesPanel = @import("panels/notes.zig").NotesPanel;
 
@@ -25,7 +25,7 @@ pub const Dashboard = struct {
     
     // Panels
     todo_panel: TodoPanel,
-    system_monitor_panel: SystemMonitorPanel,
+    patrick_panel: PatrickPanel,
     pomodoro_panel: PomodoroPanel,
     notes_panel: NotesPanel,
     
@@ -47,29 +47,22 @@ pub const Dashboard = struct {
         // First split horizontally to create top and bottom rows
         try layout.splitPanel("todo", .horizontal, "bottom_row", 0.6);
         // Split the top row (todo) vertically
-        try layout.splitPanel("todo", .vertical, "system_monitor", 0.7);
+        try layout.splitPanel("todo", .vertical, "patrick", 0.7);
         // Split the bottom row into notes and pomodoro
-        try layout.splitPanel("bottom_row", .vertical, "pomodoro", 0.7);
+        // When we split "bottom_row" vertically with ratio 0.5:
+        // - The left 50% remains as "bottom_row" 
+        // - The right 50% becomes "pomodoro"
+        try layout.splitPanel("bottom_row", .vertical, "pomodoro", 0.5);
         
-        // Rename the left panel of bottom_row to "notes"
-        if (layout.findPanel(layout.root, "bottom_row")) |node| {
-            switch (node.*) {
-                .split => |*split| {
-                    switch (split.first.*) {
-                        .panel => |*panel| panel.id = "notes",
-                        else => {},
-                    }
-                },
-                else => {},
-            }
-        }
+        // So we need to create a notes panel that references "bottom_row"
+        // Since bottom_row is now the left half of the bottom section
         
         var todo_panel = try TodoPanel.init(allocator);
         errdefer todo_panel.deinit();
         todo_panel.focused = true;
         
-        var system_monitor_panel = try SystemMonitorPanel.init(allocator);
-        errdefer system_monitor_panel.deinit();
+        var patrick_panel = try PatrickPanel.init(allocator);
+        errdefer patrick_panel.deinit();
         
         var pomodoro_panel = try PomodoroPanel.init(allocator);
         errdefer pomodoro_panel.deinit();
@@ -85,7 +78,7 @@ pub const Dashboard = struct {
             .layout = layout,
             .theme = Theme.cyberpunk,
             .todo_panel = todo_panel,
-            .system_monitor_panel = system_monitor_panel,
+            .patrick_panel = patrick_panel,
             .pomodoro_panel = pomodoro_panel,
             .notes_panel = notes_panel,
         };
@@ -93,7 +86,7 @@ pub const Dashboard = struct {
     
     pub fn deinit(self: *Dashboard) void {
         self.todo_panel.deinit();
-        self.system_monitor_panel.deinit();
+        self.patrick_panel.deinit();
         self.pomodoro_panel.deinit();
         self.notes_panel.deinit();
         self.layout.deinit();
@@ -172,8 +165,8 @@ pub const Dashboard = struct {
         // Route to active panel
         if (std.mem.eql(u8, self.active_panel, "todo")) {
             _ = try self.todo_panel.handleEvent(event);
-        } else if (std.mem.eql(u8, self.active_panel, "system_monitor")) {
-            _ = try self.system_monitor_panel.handleEvent(event);
+        } else if (std.mem.eql(u8, self.active_panel, "patrick")) {
+            _ = try self.patrick_panel.handleEvent(event);
         } else if (std.mem.eql(u8, self.active_panel, "pomodoro")) {
             _ = try self.pomodoro_panel.handleEvent(event);
         } else if (std.mem.eql(u8, self.active_panel, "notes")) {
@@ -214,13 +207,13 @@ pub const Dashboard = struct {
             try self.todo_panel.render(&self.screen, todo_bounds, self.theme);
         }
         
-        // Render system monitor panel
-        if (self.layout.getPanelRect("system_monitor", content_bounds)) |monitor_bounds| {
-            try self.system_monitor_panel.render(&self.screen, monitor_bounds, self.theme);
+        // Render patrick panel
+        if (self.layout.getPanelRect("patrick", content_bounds)) |patrick_bounds| {
+            try self.patrick_panel.render(&self.screen, patrick_bounds, self.theme);
         }
         
-        // Render notes panel
-        if (self.layout.getPanelRect("notes", content_bounds)) |notes_bounds| {
+        // Render notes panel (it's called "bottom_row" in the layout)
+        if (self.layout.getPanelRect("bottom_row", content_bounds)) |notes_bounds| {
             try self.notes_panel.render(&self.screen, notes_bounds, self.theme);
         }
         
@@ -379,7 +372,7 @@ pub const Dashboard = struct {
         
         // Clear all focus states first
         self.todo_panel.focused = false;
-        self.system_monitor_panel.focused = false;
+        self.patrick_panel.focused = false;
         self.pomodoro_panel.focused = false;
         self.notes_panel.focused = false;
         
@@ -391,13 +384,13 @@ pub const Dashboard = struct {
                         if (std.mem.eql(u8, panel.id, "todo")) {
                             self.todo_panel.focused = true;
                             self.active_panel = "todo";
-                        } else if (std.mem.eql(u8, panel.id, "system_monitor")) {
-                            self.system_monitor_panel.focused = true;
-                            self.active_panel = "system_monitor";
+                        } else if (std.mem.eql(u8, panel.id, "patrick")) {
+                            self.patrick_panel.focused = true;
+                            self.active_panel = "patrick";
                         } else if (std.mem.eql(u8, panel.id, "pomodoro")) {
                             self.pomodoro_panel.focused = true;
                             self.active_panel = "pomodoro";
-                        } else if (std.mem.eql(u8, panel.id, "notes")) {
+                        } else if (std.mem.eql(u8, panel.id, "bottom_row")) {
                             self.notes_panel.focused = true;
                             self.active_panel = "notes";
                         }

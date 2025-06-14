@@ -73,14 +73,29 @@ pub const PomodoroPanel = struct {
         // Update timer
         self.update();
         
+        // Fill solid background
+        const bg_color = Color{ .r = 30, .g = 20, .b = 30 }; // Dark purple background
+        var y: u16 = bounds.y;
+        while (y < bounds.y + bounds.height) : (y += 1) {
+            var x: u16 = bounds.x;
+            while (x < bounds.x + bounds.width) : (x += 1) {
+                screen.setCell(x, y, .{
+                    .char = ' ',
+                    .fg = theme.text_primary,
+                    .bg = bg_color,
+                    .style = .{},
+                });
+            }
+        }
+        
         // Draw border
         screen.drawBox(bounds.x, bounds.y, bounds.width, bounds.height,
-                      if (self.focused) theme.accent else theme.border, theme.panel_bg);
+                      if (self.focused) theme.accent else theme.border, bg_color);
         
         // Title
         const title = " POMODORO ";
         const title_x = bounds.x + (bounds.width - @as(u16, @intCast(title.len))) / 2;
-        screen.writeText(title_x, bounds.y, title, theme.text_primary, theme.panel_bg, .{ .bold = true });
+        screen.writeText(title_x, bounds.y, title, theme.text_primary, bg_color, .{ .bold = true });
         
         // Timer display
         const remaining = self.duration - self.elapsed;
@@ -107,7 +122,7 @@ pub const PomodoroPanel = struct {
                         .long_break => theme.medium_priority,
                         .idle => theme.text_dim,
                     },
-                    .bg = theme.panel_bg,
+                    .bg = bg_color,
                     .style = .{ .bold = true },
                 });
             }
@@ -122,13 +137,13 @@ pub const PomodoroPanel = struct {
         };
         
         const state_x = bounds.x + (bounds.width - @as(u16, @intCast(state_text.len))) / 2;
-        screen.writeText(state_x, timer_y + 2, state_text, theme.text_secondary, theme.panel_bg, .{});
+        screen.writeText(state_x, timer_y + 2, state_text, theme.text_secondary, bg_color, .{});
         
         // Cycle counter
         var cycle_buf: [32]u8 = undefined;
         const cycle_text = std.fmt.bufPrint(&cycle_buf, "Cycles: {d}", .{self.cycles}) catch "Cycles: ?";
         const cycle_x = bounds.x + (bounds.width - @as(u16, @intCast(cycle_text.len))) / 2;
-        screen.writeText(cycle_x, timer_y + 3, cycle_text, theme.text_dim, theme.panel_bg, .{});
+        screen.writeText(cycle_x, timer_y + 3, cycle_text, theme.text_dim, bg_color, .{});
         
         // Progress bar
         if (bounds.height > 8) {
@@ -140,14 +155,14 @@ pub const PomodoroPanel = struct {
             const bar_x = bounds.x + (bounds.width - bar_width) / 2;
             const bar_y = timer_y - 2;
             
-            self.drawProgressBar(screen, bar_x, bar_y, bar_width, progress, theme);
+            self.drawProgressBar(screen, bar_x, bar_y, bar_width, progress, theme, bg_color);
         }
         
         // Controls
         if (bounds.height > 10) {
             const controls = "[Space] Start/Pause  [R] Reset  [S] Skip";
             const controls_x = bounds.x + (bounds.width - @as(u16, @intCast(controls.len))) / 2;
-            screen.writeText(controls_x, bounds.y + bounds.height - 2, controls, theme.text_dim, theme.panel_bg, .{});
+            screen.writeText(controls_x, bounds.y + bounds.height - 2, controls, theme.text_dim, bg_color, .{});
         }
     }
     
@@ -211,7 +226,7 @@ pub const PomodoroPanel = struct {
         }
     }
     
-    fn drawProgressBar(self: *PomodoroPanel, screen: *Screen, x: u16, y: u16, width: u16, progress: f32, theme: Theme) void {
+    fn drawProgressBar(self: *PomodoroPanel, screen: *Screen, x: u16, y: u16, width: u16, progress: f32, theme: Theme, bg_color: Color) void {
         _ = self;
         
         const filled = @as(u16, @intFromFloat(@as(f32, @floatFromInt(width)) * progress));
@@ -222,7 +237,7 @@ pub const PomodoroPanel = struct {
             screen.setCell(x + i, y, .{
                 .char = char,
                 .fg = color,
-                .bg = theme.panel_bg,
+                .bg = bg_color,
                 .style = .{},
             });
         }

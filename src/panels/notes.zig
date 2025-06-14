@@ -131,16 +131,31 @@ pub const NotesPanel = struct {
         // Update lines from content
         self.updateLines();
         
+        // Fill solid background
+        const bg_color = Color{ .r = 20, .g = 40, .b = 30 }; // Dark green background
+        var y: u16 = bounds.y;
+        while (y < bounds.y + bounds.height) : (y += 1) {
+            var x: u16 = bounds.x;
+            while (x < bounds.x + bounds.width) : (x += 1) {
+                screen.setCell(x, y, .{
+                    .char = ' ',
+                    .fg = theme.text_primary,
+                    .bg = bg_color,
+                    .style = .{},
+                });
+            }
+        }
+        
         // Draw border
         screen.drawBox(bounds.x, bounds.y, bounds.width, bounds.height,
-                      if (self.focused) theme.accent else theme.border, theme.panel_bg);
+                      if (self.focused) theme.accent else theme.border, bg_color);
         
         // Title with mode indicator
         const mode_indicator = if (self.insert_mode) " [INSERT]" else " [NORMAL]";
         var title_buf: [32]u8 = undefined;
         const title = std.fmt.bufPrint(&title_buf, " NOTES{s} ", .{mode_indicator}) catch " NOTES ";
         const title_x = bounds.x + (bounds.width - @as(u16, @intCast(title.len))) / 2;
-        screen.writeText(title_x, bounds.y, title, theme.text_primary, theme.panel_bg, .{ .bold = true });
+        screen.writeText(title_x, bounds.y, title, theme.text_primary, bg_color, .{ .bold = true });
         
         // Calculate visible area
         const content_y = bounds.y + 1;
@@ -155,23 +170,23 @@ pub const NotesPanel = struct {
         }
         
         // Render visible lines
-        var y: usize = 0;
-        while (y < content_height) : (y += 1) {
-            const line_idx = self.scroll_offset + y;
+        var line_y: usize = 0;
+        while (line_y < content_height) : (line_y += 1) {
+            const line_idx = self.scroll_offset + line_y;
             if (line_idx >= self.lines.items.len) break;
             
             const line = self.lines.items[line_idx];
             const display_line = if (line.len > content_width) line[0..content_width] else line;
             
-            screen.writeText(bounds.x + 1, content_y + @as(u16, @intCast(y)), display_line, theme.text_primary, theme.panel_bg, .{});
+            screen.writeText(bounds.x + 1, content_y + @as(u16, @intCast(line_y)), display_line, theme.text_primary, bg_color, .{});
             
             // Show cursor
             if (self.focused and line_idx == self.cursor_line) {
                 const cursor_x = @min(self.cursor_col, line.len);
                 if (cursor_x <= content_width) {
-                    screen.setCell(bounds.x + 1 + @as(u16, @intCast(cursor_x)), content_y + @as(u16, @intCast(y)), .{
+                    screen.setCell(bounds.x + 1 + @as(u16, @intCast(cursor_x)), content_y + @as(u16, @intCast(line_y)), .{
                         .char = if (cursor_x < line.len) line[cursor_x] else ' ',
-                        .fg = theme.panel_bg,
+                        .fg = bg_color,
                         .bg = if (self.insert_mode) theme.accent else theme.text_primary,
                         .style = .{},
                     });
@@ -189,7 +204,7 @@ pub const NotesPanel = struct {
             }) catch "";
             
             if (status.len < bounds.width) {
-                screen.writeText(bounds.x + bounds.width - @as(u16, @intCast(status.len)), bounds.y + bounds.height - 1, status, theme.text_dim, theme.panel_bg, .{});
+                screen.writeText(bounds.x + bounds.width - @as(u16, @intCast(status.len)), bounds.y + bounds.height - 1, status, theme.text_dim, bg_color, .{});
             }
         }
     }

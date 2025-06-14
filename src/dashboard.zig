@@ -10,6 +10,7 @@ const Layout = @import("ui/layout.zig").Layout;
 const Rect = @import("ui/layout.zig").Rect;
 const Theme = @import("ui/theme.zig").Theme;
 const TodoPanel = @import("panels/todo.zig").TodoPanel;
+const SystemMonitorPanel = @import("panels/system_monitor.zig").SystemMonitorPanel;
 
 pub const Dashboard = struct {
     allocator: std.mem.Allocator,
@@ -22,6 +23,7 @@ pub const Dashboard = struct {
     
     // Panels
     todo_panel: TodoPanel,
+    system_monitor_panel: SystemMonitorPanel,
     
     // State
     active_panel: []const u8 = "todo",
@@ -37,12 +39,15 @@ pub const Dashboard = struct {
         var layout = try Layout.init(allocator);
         errdefer layout.deinit();
         
-        // For now, just keep root as todo panel
-        // We'll implement proper layout splitting later
+        // Split the layout to show both panels
+        try layout.splitPanel("todo", .vertical, "system_monitor", 0.7);
         
         var todo_panel = try TodoPanel.init(allocator);
         errdefer todo_panel.deinit();
         todo_panel.focused = true;
+        
+        var system_monitor_panel = try SystemMonitorPanel.init(allocator);
+        errdefer system_monitor_panel.deinit();
         
         return Dashboard{
             .allocator = allocator,
@@ -52,11 +57,13 @@ pub const Dashboard = struct {
             .layout = layout,
             .theme = Theme.cyberpunk,
             .todo_panel = todo_panel,
+            .system_monitor_panel = system_monitor_panel,
         };
     }
     
     pub fn deinit(self: *Dashboard) void {
         self.todo_panel.deinit();
+        self.system_monitor_panel.deinit();
         self.layout.deinit();
         self.screen.deinit();
         self.raw_mode.disable();
@@ -133,6 +140,8 @@ pub const Dashboard = struct {
         // Route to active panel
         if (std.mem.eql(u8, self.active_panel, "todo")) {
             _ = try self.todo_panel.handleEvent(event);
+        } else if (std.mem.eql(u8, self.active_panel, "system_monitor")) {
+            _ = try self.system_monitor_panel.handleEvent(event);
         }
     }
     
@@ -161,8 +170,18 @@ pub const Dashboard = struct {
             .height = screen_bounds.height - 4, // Header + footer
         };
         
-        // For now, just render todo panel full screen
-        try self.todo_panel.render(&self.screen, content_bounds, self.theme);
+        // Use layout system to render panels
+        self.layout.calculate(content_bounds);
+        
+        // Render todo panel
+        if (self.layout.getPanelRect("todo", content_bounds)) |todo_bounds| {
+            try self.todo_panel.render(&self.screen, todo_bounds, self.theme);
+        }
+        
+        // Render system monitor panel
+        if (self.layout.getPanelRect("system_monitor", content_bounds)) |monitor_bounds| {
+            try self.system_monitor_panel.render(&self.screen, monitor_bounds, self.theme);
+        }
         
         // Draw footer
         self.renderFooter(Rect{
@@ -299,7 +318,35 @@ pub const Dashboard = struct {
     }
     
     fn focusNextPanel(self: *Dashboard) void {
-        // For now, just todo panel
-        _ = self;
+        // Switch focus between panels
+        self.layout.focusNext();
+        
+        // Update panel focus states and active panel
+        var panels = std.ArrayList(*Layout.Node).init(self.allocator);
+        defer panels.deinit();
+        
+        self.layout.collectPanels(self.layout.root, &panels) catch return;
+        
+        // Clear all focus states first
+        self.todo_panel.focused = false;
+        self.system_monitor_panel.focused = false;
+        
+        // Set focus based on layout
+        for (panels.items) |node| {
+            switch (node.*) {
+                .panel => |panel| {
+                    if (panel.focused) {
+                        if (std.mem.eql(u8, panel.id, "todo")) {
+                            self.todo_panel.focused = true;
+                            self.active_panel = "todo";
+                        } else if (std.mem.eql(u8, panel.id, "system_monitor")) {
+                            self.system_monitor_panel.focused = true;
+                            self.active_panel = "system_monitor";
+                        }
+                    }
+                },
+                else => {},
+            }
+        }
     }
 };

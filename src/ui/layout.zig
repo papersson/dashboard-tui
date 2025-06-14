@@ -213,7 +213,7 @@ pub const Layout = struct {
         panels.items[next_idx].panel.focused = true;
     }
     
-    fn collectPanels(self: *Layout, node: *Node, list: *std.ArrayList(*Node)) !void {
+    pub fn collectPanels(self: *Layout, node: *Node, list: *std.ArrayList(*Node)) !void {
         switch (node.*) {
             .panel => try list.append(node),
             .split => |split| {

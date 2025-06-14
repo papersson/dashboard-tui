@@ -9,6 +9,8 @@ const Key = @import("terminal/input.zig").Key;
 const Layout = @import("ui/layout.zig").Layout;
 const Rect = @import("ui/layout.zig").Rect;
 const Theme = @import("ui/theme.zig").Theme;
+const VisualEffects = @import("ui/visual_effects.zig").VisualEffects;
+const Gradient = @import("ui/visual_effects.zig").Gradient;
 const TodoPanel = @import("panels/todo.zig").TodoPanel;
 const PatrickPanel = @import("panels/patrick.zig").PatrickPanel;
 const PomodoroPanel = @import("panels/pomodoro.zig").PomodoroPanel;
@@ -199,8 +201,12 @@ pub const Dashboard = struct {
             .height = screen_bounds.height - 4, // Header + footer
         };
         
-        // Fill entire content area with dark background to prevent gaps
-        self.screen.fillRect(content_bounds.x, content_bounds.y, content_bounds.width, content_bounds.height, self.theme.bg);
+        // Render background with gradient effect
+        if (self.theme.panel_gradient) |gradient| {
+            VisualEffects.renderGradient(&self.screen, content_bounds, gradient);
+        } else {
+            self.screen.fillRect(content_bounds.x, content_bounds.y, content_bounds.width, content_bounds.height, self.theme.bg);
+        }
         
         // Use layout system to render panels
         self.layout.calculate(content_bounds);
@@ -243,8 +249,13 @@ pub const Dashboard = struct {
     }
     
     fn renderHeader(self: *Dashboard, bounds: Rect) void {
-        // Background
-        self.screen.fillRect(0, 0, bounds.width, 2, self.theme.bg);
+        // Background with subtle gradient
+        const header_gradient = Gradient{
+            .start_color = Color{ .r = 20, .g = 20, .b = 40 },
+            .end_color = self.theme.bg,
+            .type = .linear_vertical,
+        };
+        VisualEffects.renderGradient(&self.screen, Rect{ .x = 0, .y = 0, .width = bounds.width, .height = 2 }, header_gradient);
         
         // Title
         const title = "🚀 PERSONAL DASHBOARD";
@@ -279,27 +290,43 @@ pub const Dashboard = struct {
             self.screen.writeText(bounds.width - @as(u16, @intCast(datetime.len)) - 2, 0, datetime, self.theme.text_secondary, self.theme.bg, .{});
         }
         
-        // Separator line
+        // Separator line with glow effect
         var x: u16 = 0;
         while (x < bounds.width) : (x += 1) {
+            const center = bounds.width / 2;
+            const distance = if (x > center) x - center else center - x;
+            const glow_intensity = 1.0 - (@as(f32, @floatFromInt(distance)) / @as(f32, @floatFromInt(center)));
+            const glow_color = Color{
+                .r = @intFromFloat(@as(f32, @floatFromInt(self.theme.border.r)) + glow_intensity * 50),
+                .g = @intFromFloat(@as(f32, @floatFromInt(self.theme.border.g)) + glow_intensity * 50),
+                .b = @intFromFloat(@as(f32, @floatFromInt(self.theme.border.b)) + glow_intensity * 100),
+            };
             self.screen.setCell(x, 1, .{
-                .char = '─',
-                .fg = self.theme.border,
-                .bg = self.theme.bg,
-                .style = .{},
+                .char = '═',
+                .fg = glow_color,
+                .bg = Color.black,
+                .style = .{ .bold = true },
             });
         }
     }
     
     fn renderFooter(self: *Dashboard, bounds: Rect) void {
-        // Separator line
+        // Separator line with glow
         var x: u16 = 0;
         while (x < bounds.width) : (x += 1) {
+            const center = bounds.width / 2;
+            const distance = if (x > center) x - center else center - x;
+            const glow_intensity = 1.0 - (@as(f32, @floatFromInt(distance)) / @as(f32, @floatFromInt(center)));
+            const glow_color = Color{
+                .r = @intFromFloat(@as(f32, @floatFromInt(self.theme.border.r)) + glow_intensity * 50),
+                .g = @intFromFloat(@as(f32, @floatFromInt(self.theme.border.g)) + glow_intensity * 50),
+                .b = @intFromFloat(@as(f32, @floatFromInt(self.theme.border.b)) + glow_intensity * 100),
+            };
             self.screen.setCell(x, bounds.y, .{
-                .char = '─',
-                .fg = self.theme.border,
-                .bg = self.theme.bg,
-                .style = .{},
+                .char = '═',
+                .fg = glow_color,
+                .bg = Color.black,
+                .style = .{ .bold = true },
             });
         }
         

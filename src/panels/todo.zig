@@ -4,6 +4,9 @@ const Color = @import("../terminal/screen.zig").Color;
 const Style = @import("../terminal/screen.zig").Style;
 const Rect = @import("../ui/layout.zig").Rect;
 const Theme = @import("../ui/theme.zig").Theme;
+const VisualEffects = @import("../ui/visual_effects.zig").VisualEffects;
+const Gradient = @import("../ui/visual_effects.zig").Gradient;
+const GlowEffect = @import("../ui/visual_effects.zig").GlowEffect;
 const Todo = @import("../models/todo.zig").Todo;
 const TodoList = @import("../models/todo.zig").TodoList;
 const Priority = @import("../models/todo.zig").Priority;
@@ -230,24 +233,26 @@ pub const TodoPanel = struct {
     }
     
     pub fn render(self: *TodoPanel, screen: *Screen, bounds: Rect, theme: Theme) !void {
-        // Fill solid background
-        const bg_color = Color{ .r = 20, .g = 30, .b = 40 }; // Dark blue background
-        var y: u16 = bounds.y;
-        while (y < bounds.y + bounds.height) : (y += 1) {
-            var x: u16 = bounds.x;
-            while (x < bounds.x + bounds.width) : (x += 1) {
-                screen.setCell(x, y, .{
-                    .char = ' ',
-                    .fg = theme.text_primary,
-                    .bg = bg_color,
-                    .style = .{},
-                });
-            }
+        // Render gradient background
+        const todo_gradient = Gradient{
+            .start_color = Color{ .r = 10, .g = 20, .b = 50 },
+            .end_color = Color{ .r = 5, .g = 10, .b = 30 },
+            .type = .linear_vertical,
+        };
+        VisualEffects.renderGradient(screen, bounds, todo_gradient);
+        
+        // Add shadow effect if enabled
+        if (theme.panel_shadow) |shadow| {
+            VisualEffects.renderShadow(screen, bounds, shadow);
         }
         
-        // Draw border
+        // Draw border with glow effect
         const border_color = if (self.focused) theme.border_active else theme.border;
-        screen.drawBox(bounds.x, bounds.y, bounds.width, bounds.height, border_color, bg_color);
+        if (self.focused and theme.border_glow != null) {
+            VisualEffects.renderGlowBorder(screen, bounds, border_color, theme.border_glow.?);
+        } else {
+            screen.drawBox(bounds.x, bounds.y, bounds.width, bounds.height, border_color, Color.black);
+        }
         
         // Draw title
         const title = "TODO LIST";
@@ -261,7 +266,7 @@ pub const TodoPanel = struct {
         
         var title_buf: [64]u8 = undefined;
         const title_text = std.fmt.bufPrint(&title_buf, "{s} [{d}/{d}]", .{ title, completed_count, self.todos.todos.items.len }) catch title;
-        screen.writeText(bounds.x + 2, bounds.y, title_text, theme.accent, bg_color, .{ .bold = true });
+        screen.writeText(bounds.x + 2, bounds.y, title_text, theme.accent, Color.black, .{ .bold = true });
         
         // Draw todos
         const content_bounds = bounds.shrink(1);
@@ -311,7 +316,7 @@ pub const TodoPanel = struct {
                 .medium => theme.medium_priority,
                 .low => theme.low_priority,
             };
-            screen.writeText(content_bounds.x + 1, todo_y, todo.priority.symbol(), priority_color, if (is_selected) theme.accent_dim else bg_color, .{});
+            screen.writeText(content_bounds.x + 1, todo_y, todo.priority.symbol(), priority_color, if (is_selected) theme.accent_dim else Color.black, .{});
             
             // Status indicator
             const status_char: []const u8 = switch (todo.status) {
@@ -320,19 +325,19 @@ pub const TodoPanel = struct {
                 .pending => " ",
             };
             const status_color = if (todo.status == .completed) theme.success else theme.text_primary;
-            screen.writeText(content_bounds.x + 3, todo_y, status_char, status_color, if (is_selected) theme.accent_dim else bg_color, .{});
+            screen.writeText(content_bounds.x + 3, todo_y, status_char, status_color, if (is_selected) theme.accent_dim else Color.black, .{});
             
             // Todo title
             const text_color = if (todo.status == .completed) theme.text_dim else theme.text_primary;
             const text_style = Style{ .dim = todo.status == .completed };
             const max_width = content_bounds.width - 6;
             const todo_title = if (todo.title.len > max_width) todo.title[0..max_width] else todo.title;
-            screen.writeText(content_bounds.x + 5, todo_y, todo_title, text_color, if (is_selected) theme.accent_dim else bg_color, text_style);
+            screen.writeText(content_bounds.x + 5, todo_y, todo_title, text_color, if (is_selected) theme.accent_dim else Color.black, text_style);
             
             // Due date indicator if overdue
             if (todo.isOverdue()) {
                 const overdue_text = "!";
-                screen.writeText(content_bounds.x + content_bounds.width - 2, todo_y, overdue_text, theme.@"error", if (is_selected) theme.accent_dim else bg_color, .{ .bold = true });
+                screen.writeText(content_bounds.x + content_bounds.width - 2, todo_y, overdue_text, theme.@"error", if (is_selected) theme.accent_dim else Color.black, .{ .bold = true });
             }
         }
         
@@ -340,22 +345,22 @@ pub const TodoPanel = struct {
         const input_y = content_bounds.y + content_bounds.height - 1;
         switch (self.input_mode) {
             .adding => {
-                screen.writeText(content_bounds.x + 1, input_y, "[+] ", theme.accent, bg_color, .{});
-                screen.writeText(content_bounds.x + 5, input_y, self.input_buffer.items, theme.text_primary, bg_color, .{});
+                screen.writeText(content_bounds.x + 1, input_y, "[+] ", theme.accent, Color.black, .{});
+                screen.writeText(content_bounds.x + 5, input_y, self.input_buffer.items, theme.text_primary, Color.black, .{});
                 screen.cursor_visible = true;
                 screen.cursor_x = content_bounds.x + 5 + @as(u16, @intCast(self.input_buffer.items.len));
                 screen.cursor_y = input_y;
             },
             .editing => {
-                screen.writeText(content_bounds.x + 1, input_y, "[~] ", theme.accent, bg_color, .{});
-                screen.writeText(content_bounds.x + 5, input_y, self.input_buffer.items, theme.text_primary, bg_color, .{});
+                screen.writeText(content_bounds.x + 1, input_y, "[~] ", theme.accent, Color.black, .{});
+                screen.writeText(content_bounds.x + 5, input_y, self.input_buffer.items, theme.text_primary, Color.black, .{});
                 screen.cursor_visible = true;
                 screen.cursor_x = content_bounds.x + 5 + @as(u16, @intCast(self.input_buffer.items.len));
                 screen.cursor_y = input_y;
             },
             .filtering => {
-                screen.writeText(content_bounds.x + 1, input_y, "[/] ", theme.accent, bg_color, .{});
-                screen.writeText(content_bounds.x + 5, input_y, self.input_buffer.items, theme.text_primary, bg_color, .{});
+                screen.writeText(content_bounds.x + 1, input_y, "[/] ", theme.accent, Color.black, .{});
+                screen.writeText(content_bounds.x + 5, input_y, self.input_buffer.items, theme.text_primary, Color.black, .{});
                 screen.cursor_visible = true;
                 screen.cursor_x = content_bounds.x + 5 + @as(u16, @intCast(self.input_buffer.items.len));
                 screen.cursor_y = input_y;
@@ -364,9 +369,9 @@ pub const TodoPanel = struct {
                 if (self.filter_text.len > 0) {
                     var filter_buf: [64]u8 = undefined;
                     const filter_display = std.fmt.bufPrint(&filter_buf, "Filter: {s}", .{self.filter_text}) catch "";
-                    screen.writeText(content_bounds.x + 1, input_y, filter_display, theme.text_secondary, bg_color, .{});
+                    screen.writeText(content_bounds.x + 1, input_y, filter_display, theme.text_secondary, Color.black, .{});
                 } else {
-                    screen.writeText(content_bounds.x + 1, input_y, "[a] Add  [d] Delete  [p] Priority  [f] Filter", theme.text_dim, bg_color, .{});
+                    screen.writeText(content_bounds.x + 1, input_y, "[a] Add  [d] Delete  [p] Priority  [f] Filter", theme.text_dim, Color.black, .{});
                 }
             },
         }

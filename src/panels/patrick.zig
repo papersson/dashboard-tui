@@ -4,6 +4,9 @@ const Color = @import("../terminal/screen.zig").Color;
 const Event = @import("../terminal/input.zig").Event;
 const Rect = @import("../ui/layout.zig").Rect;
 const Theme = @import("../ui/theme.zig").Theme;
+const VisualEffects = @import("../ui/visual_effects.zig").VisualEffects;
+const Gradient = @import("../ui/visual_effects.zig").Gradient;
+const GlowEffect = @import("../ui/visual_effects.zig").GlowEffect;
 
 pub const PatrickPanel = struct {
     allocator: std.mem.Allocator,
@@ -75,32 +78,40 @@ pub const PatrickPanel = struct {
         // Update animation
         self.update();
         
-        // Define background color
-        const bg_color = Color{ .r = 40, .g = 20, .b = 40 }; // Purple background
+        // Render gradient background with animated colors
+        const patrick_gradient = Gradient{
+            .start_color = Color{ 
+                .r = @intFromFloat(40.0 + @as(f32, @floatFromInt(self.frame)) * 5.0),
+                .g = 10,
+                .b = @intFromFloat(50.0 + @as(f32, @floatFromInt(self.frame)) * 8.0)
+            },
+            .end_color = Color{ .r = 20, .g = 5, .b = 30 },
+            .type = .radial,
+        };
+        VisualEffects.renderGradient(screen, bounds, patrick_gradient);
         
-        // Fill solid background
-        var y: u16 = bounds.y;
-        while (y < bounds.y + bounds.height) : (y += 1) {
-            var x: u16 = bounds.x;
-            while (x < bounds.x + bounds.width) : (x += 1) {
-                screen.setCell(x, y, .{
-                    .char = ' ',
-                    .fg = theme.text_primary,
-                    .bg = bg_color,
-                    .style = .{},
-                });
-            }
+        // Add shadow effect
+        if (theme.panel_shadow) |shadow| {
+            VisualEffects.renderShadow(screen, bounds, shadow);
         }
         
-        // Draw border
-        screen.drawBox(bounds.x, bounds.y, bounds.width, bounds.height, 
-                      if (self.focused) theme.accent else theme.border, 
-                      bg_color);
+        // Draw border with glow effect
+        const border_color = if (self.focused) theme.accent else theme.border;
+        if (self.focused and theme.border_glow != null) {
+            const glow = GlowEffect{
+                .color = colors[self.frame],
+                .intensity = 0.8,
+                .radius = 4,
+            };
+            VisualEffects.renderGlowBorder(screen, bounds, border_color, glow);
+        } else {
+            screen.drawBox(bounds.x, bounds.y, bounds.width, bounds.height, border_color, Color.black);
+        }
         
-        // Title
+        // Title with glow
         const title = " PATRICK STAR ";
         const title_x = bounds.x + (bounds.width - @as(u16, @intCast(title.len))) / 2;
-        screen.writeText(title_x, bounds.y, title, theme.text_primary, bg_color, .{ .bold = true });
+        screen.writeText(title_x, bounds.y, title, colors[self.frame], Color.black, .{ .bold = true });
         
         // Calculate center position for Patrick
         const art_height = patrick_art.len;
@@ -149,7 +160,7 @@ pub const PatrickPanel = struct {
                         screen.setCell(char_x, line_y, .{
                             .char = codepoint,
                             .fg = color,
-                            .bg = bg_color,
+                            .bg = Color.black,
                             .style = .{},
                         });
                     }
@@ -169,7 +180,7 @@ pub const PatrickPanel = struct {
             const message = messages[self.frame % messages.len];
             const msg_x = bounds.x + (bounds.width - @as(u16, @intCast(message.len))) / 2;
             const msg_y = bounds.y + bounds.height - 2;
-            screen.writeText(msg_x, msg_y, message, colors[self.frame], bg_color, .{ .italic = true });
+            screen.writeText(msg_x, msg_y, message, colors[self.frame], Color.black, .{ .italic = true });
         }
     }
 };

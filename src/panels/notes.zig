@@ -5,6 +5,9 @@ const Event = @import("../terminal/input.zig").Event;
 const Key = @import("../terminal/input.zig").Key;
 const Rect = @import("../ui/layout.zig").Rect;
 const Theme = @import("../ui/theme.zig").Theme;
+const VisualEffects = @import("../ui/visual_effects.zig").VisualEffects;
+const Gradient = @import("../ui/visual_effects.zig").Gradient;
+const GlowEffect = @import("../ui/visual_effects.zig").GlowEffect;
 
 pub const NotesPanel = struct {
     allocator: std.mem.Allocator,
@@ -156,31 +159,41 @@ pub const NotesPanel = struct {
         // Update lines from content
         self.updateLines();
         
-        // Fill solid background
-        const bg_color = Color{ .r = 20, .g = 40, .b = 30 }; // Dark green background
-        var y: u16 = bounds.y;
-        while (y < bounds.y + bounds.height) : (y += 1) {
-            var x: u16 = bounds.x;
-            while (x < bounds.x + bounds.width) : (x += 1) {
-                screen.setCell(x, y, .{
-                    .char = ' ',
-                    .fg = theme.text_primary,
-                    .bg = bg_color,
-                    .style = .{},
-                });
-            }
+        // Render gradient background
+        const notes_gradient = Gradient{
+            .start_color = Color{ .r = 10, .g = 30, .b = 20 },
+            .end_color = Color{ .r = 5, .g = 15, .b = 10 },
+            .type = .diagonal,
+        };
+        VisualEffects.renderGradient(screen, bounds, notes_gradient);
+        
+        // Add shadow effect
+        if (theme.panel_shadow) |shadow| {
+            VisualEffects.renderShadow(screen, bounds, shadow);
         }
         
-        // Draw border
-        screen.drawBox(bounds.x, bounds.y, bounds.width, bounds.height,
-                      if (self.focused) theme.accent else theme.border, bg_color);
+        // Draw border with glow effect
+        const border_color = if (self.focused) theme.accent else theme.border;
+        if (self.insert_mode and theme.border_glow != null) {
+            const glow = GlowEffect{
+                .color = theme.success,
+                .intensity = 0.6,
+                .radius = 3,
+            };
+            VisualEffects.renderGlowBorder(screen, bounds, border_color, glow);
+        } else if (self.focused and theme.border_glow != null) {
+            VisualEffects.renderGlowBorder(screen, bounds, border_color, theme.border_glow.?);
+        } else {
+            screen.drawBox(bounds.x, bounds.y, bounds.width, bounds.height, border_color, Color.black);
+        }
         
         // Title with mode indicator
         const mode_indicator = if (self.insert_mode) " [INSERT]" else " [NORMAL]";
         var title_buf: [32]u8 = undefined;
         const title = std.fmt.bufPrint(&title_buf, " NOTES{s} ", .{mode_indicator}) catch " NOTES ";
         const title_x = bounds.x + (bounds.width - @as(u16, @intCast(title.len))) / 2;
-        screen.writeText(title_x, bounds.y, title, theme.text_primary, bg_color, .{ .bold = true });
+        const title_color = if (self.insert_mode) theme.success else theme.text_primary;
+        screen.writeText(title_x, bounds.y, title, title_color, Color.black, .{ .bold = true });
         
         // Calculate visible area
         const content_y = bounds.y + 1;
@@ -203,7 +216,7 @@ pub const NotesPanel = struct {
             const line = self.lines.items[line_idx];
             const display_line = if (line.len > content_width) line[0..content_width] else line;
             
-            screen.writeText(bounds.x + 1, content_y + @as(u16, @intCast(line_y)), display_line, theme.text_primary, bg_color, .{});
+            screen.writeText(bounds.x + 1, content_y + @as(u16, @intCast(line_y)), display_line, theme.text_primary, Color.black, .{});
             
             // Show cursor
             if (self.focused and line_idx == self.cursor_line) {
@@ -211,7 +224,7 @@ pub const NotesPanel = struct {
                 if (cursor_x <= content_width) {
                     screen.setCell(bounds.x + 1 + @as(u16, @intCast(cursor_x)), content_y + @as(u16, @intCast(line_y)), .{
                         .char = if (cursor_x < line.len) line[cursor_x] else ' ',
-                        .fg = bg_color,
+                        .fg = Color.black,
                         .bg = if (self.insert_mode) theme.accent else theme.text_primary,
                         .style = .{},
                     });
@@ -229,7 +242,7 @@ pub const NotesPanel = struct {
             }) catch "";
             
             if (status.len < bounds.width) {
-                screen.writeText(bounds.x + bounds.width - @as(u16, @intCast(status.len)), bounds.y + bounds.height - 1, status, theme.text_dim, bg_color, .{});
+                screen.writeText(bounds.x + bounds.width - @as(u16, @intCast(status.len)), bounds.y + bounds.height - 1, status, theme.text_dim, Color.black, .{});
             }
         }
     }

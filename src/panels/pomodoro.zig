@@ -5,6 +5,9 @@ const Event = @import("../terminal/input.zig").Event;
 const Key = @import("../terminal/input.zig").Key;
 const Rect = @import("../ui/layout.zig").Rect;
 const Theme = @import("../ui/theme.zig").Theme;
+const VisualEffects = @import("../ui/visual_effects.zig").VisualEffects;
+const Gradient = @import("../ui/visual_effects.zig").Gradient;
+const GlowEffect = @import("../ui/visual_effects.zig").GlowEffect;
 
 pub const PomodoroPanel = struct {
     allocator: std.mem.Allocator,
@@ -73,29 +76,45 @@ pub const PomodoroPanel = struct {
         // Update timer
         self.update();
         
-        // Fill solid background
-        const bg_color = Color{ .r = 30, .g = 20, .b = 30 }; // Dark purple background
-        var y: u16 = bounds.y;
-        while (y < bounds.y + bounds.height) : (y += 1) {
-            var x: u16 = bounds.x;
-            while (x < bounds.x + bounds.width) : (x += 1) {
-                screen.setCell(x, y, .{
-                    .char = ' ',
-                    .fg = theme.text_primary,
-                    .bg = bg_color,
-                    .style = .{},
-                });
-            }
+        // Render gradient background with timer-based colors
+        const progress = if (self.duration > 0) @as(f32, @floatFromInt(self.elapsed)) / @as(f32, @floatFromInt(self.duration)) else 0.0;
+        const pomodoro_gradient = Gradient{
+            .start_color = Color{ 
+                .r = @intFromFloat(50.0 * (1.0 - progress) + 100.0 * progress),
+                .g = @intFromFloat(20.0 + 30.0 * progress),
+                .b = 60
+            },
+            .end_color = Color{ .r = 20, .g = 10, .b = 40 },
+            .type = .radial,
+        };
+        VisualEffects.renderGradient(screen, bounds, pomodoro_gradient);
+        
+        // Add shadow effect
+        if (theme.panel_shadow) |shadow| {
+            VisualEffects.renderShadow(screen, bounds, shadow);
         }
         
-        // Draw border
-        screen.drawBox(bounds.x, bounds.y, bounds.width, bounds.height,
-                      if (self.focused) theme.accent else theme.border, bg_color);
+        // Draw border with glow effect
+        const border_color = if (self.focused) theme.accent else theme.border;
+        if (self.state != .idle and theme.border_glow != null) {
+            const glow_intensity = @as(f32, @floatFromInt(@mod(std.time.milliTimestamp(), 2000))) / 2000.0;
+            const glow = GlowEffect{
+                .color = if (self.state == .work) theme.high_priority else theme.success,
+                .intensity = 0.3 + glow_intensity * 0.4,
+                .radius = 3,
+            };
+            VisualEffects.renderGlowBorder(screen, bounds, border_color, glow);
+        } else if (self.focused and theme.border_glow != null) {
+            VisualEffects.renderGlowBorder(screen, bounds, border_color, theme.border_glow.?);
+        } else {
+            screen.drawBox(bounds.x, bounds.y, bounds.width, bounds.height, border_color, Color.black);
+        }
         
         // Title
         const title = " POMODORO ";
         const title_x = bounds.x + (bounds.width - @as(u16, @intCast(title.len))) / 2;
-        screen.writeText(title_x, bounds.y, title, theme.text_primary, bg_color, .{ .bold = true });
+        const title_color = if (self.state == .work) theme.high_priority else if (self.state != .idle) theme.success else theme.text_primary;
+        screen.writeText(title_x, bounds.y, title, title_color, Color.black, .{ .bold = true });
         
         // Timer display
         const remaining = self.duration - self.elapsed;
@@ -122,7 +141,7 @@ pub const PomodoroPanel = struct {
                         .long_break => theme.medium_priority,
                         .idle => theme.text_dim,
                     },
-                    .bg = bg_color,
+                    .bg = Color.black,
                     .style = .{ .bold = true },
                 });
             }
@@ -137,17 +156,17 @@ pub const PomodoroPanel = struct {
         };
         
         const state_x = bounds.x + (bounds.width - @as(u16, @intCast(state_text.len))) / 2;
-        screen.writeText(state_x, timer_y + 2, state_text, theme.text_secondary, bg_color, .{});
+        screen.writeText(state_x, timer_y + 2, state_text, theme.text_secondary, Color.black, .{});
         
         // Cycle counter
         var cycle_buf: [32]u8 = undefined;
         const cycle_text = std.fmt.bufPrint(&cycle_buf, "Cycles: {d}", .{self.cycles}) catch "Cycles: ?";
         const cycle_x = bounds.x + (bounds.width - @as(u16, @intCast(cycle_text.len))) / 2;
-        screen.writeText(cycle_x, timer_y + 3, cycle_text, theme.text_dim, bg_color, .{});
+        screen.writeText(cycle_x, timer_y + 3, cycle_text, theme.text_dim, Color.black, .{});
         
         // Progress bar
         if (bounds.height > 8) {
-            const progress = if (self.duration > 0)
+            const bar_progress = if (self.duration > 0)
                 @as(f32, @floatFromInt(self.elapsed)) / @as(f32, @floatFromInt(self.duration))
             else 0.0;
             
@@ -155,14 +174,14 @@ pub const PomodoroPanel = struct {
             const bar_x = bounds.x + (bounds.width - bar_width) / 2;
             const bar_y = timer_y - 2;
             
-            self.drawProgressBar(screen, bar_x, bar_y, bar_width, progress, theme, bg_color);
+            self.drawProgressBar(screen, bar_x, bar_y, bar_width, bar_progress, theme, Color.black);
         }
         
         // Controls
         if (bounds.height > 10) {
             const controls = "[Space] Start/Pause  [R] Reset  [S] Skip";
             const controls_x = bounds.x + (bounds.width - @as(u16, @intCast(controls.len))) / 2;
-            screen.writeText(controls_x, bounds.y + bounds.height - 2, controls, theme.text_dim, bg_color, .{});
+            screen.writeText(controls_x, bounds.y + bounds.height - 2, controls, theme.text_dim, Color.black, .{});
         }
     }
     
@@ -226,7 +245,7 @@ pub const PomodoroPanel = struct {
         }
     }
     
-    fn drawProgressBar(self: *PomodoroPanel, screen: *Screen, x: u16, y: u16, width: u16, progress: f32, theme: Theme, bg_color: Color) void {
+    fn drawProgressBar(self: *PomodoroPanel, screen: *Screen, x: u16, y: u16, width: u16, progress: f32, theme: Theme, bg: Color) void {
         _ = self;
         
         const filled = @as(u16, @intFromFloat(@as(f32, @floatFromInt(width)) * progress));
@@ -237,7 +256,7 @@ pub const PomodoroPanel = struct {
             screen.setCell(x + i, y, .{
                 .char = char,
                 .fg = color,
-                .bg = bg_color,
+                .bg = bg,
                 .style = .{},
             });
         }

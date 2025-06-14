@@ -11,32 +11,33 @@ pub const PatrickPanel = struct {
     frame: usize = 0,
     last_update: i64 = 0,
     
+    // Original Patrick Star ASCII art
     const patrick_art = [_][]const u8{
-        "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
-        "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⠖⠉⠀⢹⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
-        "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⠞⠁⢀⠀⢠⡟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
-        "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡴⠁⠀⠀⠀⠀⡟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
-        "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣼⡇⢀⣤⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
-        "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣽⠉⠀⠘⠻⠟⠀⢠⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
-        "⡠⠤⣄⠀⠀⠀⠀⠀⠀⠀⠀⢀⡞⠉⡈⡱⠮⠉⠙⡄⠀⠈⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
-        "⣇⠀⠀⠙⢦⡀⠀⠀⠀⠀⠀⣾⠀⠼⣿⠃⢼⡧⠄⡄⠀⠀⡇⠀⠀⠀⠀⠀⠀⢀⣠⠖⠊⠉⣣",
-        "⠹⡆⠀⠀⠀⠉⠲⣄⠀⠀⠀⢸⢦⣀⡰⢧⣀⣀⡴⡁⠀⠀⣷⠀⠀⠀⢀⡠⠖⠉⠀⠀⠀⢰⠇",
-        "⠀⠹⡄⠀⠀⠀⠀⠀⠑⢦⣠⠏⣄⡀⠀⠀⣀⣠⣤⣿⠓⠀⠸⡀⣠⠔⠋⠀⠀⠀⠀⠀⣰⠃⠀",
-        "⠀⠀⠙⡄⠀⠀⠀⠀⠀⢠⠏⠀⢸⣿⣿⣿⣿⣿⣿⡏⠀⠀⡠⠟⠁⠀⠀⠀⠀⠀⢀⡞⠁⠀⠀",
-        "⠀⠀⠀⠘⣆⠀⠀⠀⣠⠏⠠⣤⣿⠟⠛⠟⢋⡽⠋⠀⠀⠈⠀⠀⠀⠀⠀⠀⠀⡰⠋⠀⠀⠀⠀",
-        "⠀⠀⠀⠀⠈⢦⠀⡴⠃⠀⠀⠈⠙⠓⠒⠉⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⠞⠁⠀⠀⠀⠀⠀",
-        "⠀⠀⠀⠀⠀⢀⡟⠁⠀⠀⠀⠀⠀⠀⠄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣴⠋⠀⠀⠀⠀⠀⠀⠀",
-        "⠀⠀⠀⠀⢀⡏⠀⡤⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠞⠹⡄⠀⠀⠀⠀⠀⠀⠀",
-        "⠀⠀⠀⠀⢸⣆⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣧⠀⠀⠀⠀⠀⠀⠀",
-        "⠀⠀⠀⠀⢹⠿⣦⣄⠀⠀⣴⣤⣀⠀⠀⠁⠇⠀⠀⠀⠀⠀⠀⠀⢀⣠⡾⢻⠀⠀⠀⠀⠀⠀⠀",
-        "⠀⠀⠀⠀⠸⡄⢹⠛⣿⣶⣬⣉⡁⠀⠀⠀⠂⠀⠀⠀⣀⣠⣴⡾⠟⠉⠀⡎⠀⠀⠀⠀⠀⠀⠀",
-        "⠀⠀⠀⠀⠀⢳⡈⣻⠋⠀⠉⢻⡛⠛⢿⠿⠿⠿⠛⠛⠋⠉⠀⠀⣀⣀⡼⠁⠀⠀⠀⠀⠀⠀⠀",
-        "⠀⠀⠀⠀⠀⠀⣿⢯⡓⠦⠤⠼⠙⠒⠋⠀⠀⠀⠂⠀⠀⠀⡰⠋⢀⡞⠁⠀⠀⠀⠀⠀⠀⠀⠀",
-        "⠀⠀⠀⠀⠀⠸⣇⠀⠈⠓⠦⢤⣀⣀⠀⠀⣀⠀⠀⠂⠀⣠⢍⣾⡏⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
-        "⠀⠀⠀⠀⠀⠀⠘⡷⠢⠤⠤⢤⠼⠈⠉⠉⢻⡄⠀⠀⠂⡇⢀⣸⠇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
-        "⠀⠀⠀⠀⠀⠀⠀⠹⣄⠀⢀⡞⠀⠀⠀⠀⠀⠙⣏⠓⠚⠉⢫⠇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
-        "⠀⠀⠀⠀⠀⠀⠀⠀⠈⠓⠋⠀⠀⠀⠀⠀⠀⠀⠘⢦⡀⢀⠞⠀⠀⠀⠀⠂⠀⠀⠀⠀⠀⠀⠀",
-        "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣉⣁⠀⠀⠀⠀⠀⠀⠀⠁⠂⠂⠀⠀⠀",
+        "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
+        "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⠖⠉⠀⢹⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
+        "⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⠞⠁⢀⠀⢠⡟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
+        "⠀⠀⠀⠀⠀⠀⠀⠀⡴⠁⠀⠀⠀⠀⡟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
+        "⠀⠀⠀⠀⠀⠀⣀⣼⡇⢀⣤⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
+        "⠀⠀⠀⠀⠀⢀⣽⠉⠀⠘⠻⠟⠀⢠⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀",
+        "⡠⠤⣄⠀⠀⠀⢀⡞⠉⡈⡱⠮⠉⠙⡄⠀⠈⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀",
+        "⣇⠀⠀⠙⢦⡀⣾⠀⠼⣿⠃⢼⡧⠄⡄⠀⠀⡇⠀⠀⠀⠀⠀⣠⠖⠊⣣",
+        "⠹⡆⠀⠀⠀⠉⢸⢦⣀⡰⢧⣀⣀⡴⡁⠀⠀⣷⠀⠀⢀⡠⠖⠉⠀⠀⢰⠇",
+        "⠀⠹⡄⠀⠀⠀⠏⣄⡀⠀⠀⣀⣠⣤⣿⠓⠀⠸⡀⣠⠔⠋⠀⠀⠀⣰⠃⠀",
+        "⠀⠀⠙⡄⠀⠀⠀⢸⣿⣿⣿⣿⣿⣿⡏⠀⠀⡠⠟⠁⠀⠀⠀⢀⡞⠁⠀⠀",
+        "⠀⠀⠀⠘⣆⠀⠠⣤⣿⠟⠛⠟⢋⡽⠋⠀⠀⠈⠀⠀⠀⠀⡰⠋⠀⠀⠀⠀",
+        "⠀⠀⠀⠀⠈⢦⠀⠈⠙⠓⠒⠉⠁⠀⠀⠀⠀⠀⠀⠀⢠⠞⠁⠀⠀⠀⠀⠀",
+        "⠀⠀⠀⠀⠀⢀⡟⠀⠀⠀⠀⠄⠀⠀⠀⠀⠀⠀⠀⣴⠋⠀⠀⠀⠀⠀⠀⠀",
+        "⠀⠀⠀⠀⢀⡏⠀⡤⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠞⠹⡄⠀⠀⠀⠀⠀⠀⠀",
+        "⠀⠀⠀⠀⢸⣆⠀⠀⠀⠀⠀⠀⠀⠁⠀⠀⠀⠀⠀⠀⣧⠀⠀⠀⠀⠀⠀⠀",
+        "⠀⠀⠀⠀⢹⠿⣦⣄⠀⣴⣤⣀⠀⠁⠇⠀⠀⠀⢀⣠⡾⢻⠀⠀⠀⠀⠀⠀",
+        "⠀⠀⠀⠀⠸⡄⢹⠛⣿⣬⣉⡁⠀⠀⠂⠀⣀⣠⣴⡾⠟⠉⡎⠀⠀⠀⠀⠀",
+        "⠀⠀⠀⠀⠀⢳⡈⣻⠋⠉⢻⡛⠛⢿⠿⠿⠛⠋⠉⠀⣀⣀⡼⠁⠀⠀⠀⠀",
+        "⠀⠀⠀⠀⠀⠀⣿⢯⡓⠦⠤⠼⠙⠒⠋⠀⠂⠀⠀⡰⠋⢀⡞⠁⠀⠀⠀⠀",
+        "⠀⠀⠀⠀⠀⠸⣇⠀⠈⠓⠦⢤⣀⣀⠀⣀⠀⠂⣠⢍⣾⡏⠀⠀⠀⠀⠀⠀",
+        "⠀⠀⠀⠀⠀⠀⠘⡷⠢⠤⠤⢤⠼⠈⠉⢻⡄⠀⡇⢀⣸⠇⠀⠀⠀⠀⠀⠀",
+        "⠀⠀⠀⠀⠀⠀⠀⠹⣄⠀⢀⡞⠀⠀⠀⠀⠙⣏⠚⠉⢫⠇⠀⠀⠀⠀⠀⠀",
+        "⠀⠀⠀⠀⠀⠀⠀⠀⠈⠓⠋⠀⠀⠀⠀⠀⠀⠘⢦⡀⢀⠞⠀⠀⠀⠀⠀⠀",
+        "⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣉⣁⠀⠀⠀⠀⠀⠀⠀",
     };
     
     const colors = [_]Color{
@@ -103,56 +104,71 @@ pub const PatrickPanel = struct {
         
         // Calculate center position for Patrick
         const art_height = patrick_art.len;
-        const art_width = patrick_art[0].len;
-        
-        // Check if panel is large enough
-        if (bounds.height < art_height + 2 or bounds.width < art_width + 2) {
-            // Just show a simple message if too small
-            const msg = "Panel too small";
-            if (bounds.width > msg.len + 2) {
-                const msg_x = bounds.x + (bounds.width - @as(u16, @intCast(msg.len))) / 2;
-                const msg_y = bounds.y + bounds.height / 2;
-                screen.writeText(msg_x, msg_y, msg, theme.text_dim, bg_color, .{});
-            }
-            return;
+        // Calculate visual width by counting Unicode codepoints
+        var art_width: u16 = 0;
+        var iter = (try std.unicode.Utf8View.init(patrick_art[0])).iterator();
+        while (iter.nextCodepoint()) |_| {
+            art_width += 1;
         }
         
-        const start_y = bounds.y + (bounds.height - @as(u16, @intCast(art_height))) / 2;
-        const start_x = bounds.x + (bounds.width - @as(u16, @intCast(art_width))) / 2;
+        // Show as much of Patrick as fits in the panel
+        const content_height = if (bounds.height > 2) bounds.height - 2 else 0;
+        const content_width = if (bounds.width > 2) bounds.width - 2 else 0;
         
-        // Draw Patrick with animated colors
+        // Center Patrick in the panel, or show top-left if too big
+        const start_y = if (art_height < content_height) 
+            bounds.y + 1 + (content_height - @as(u16, @intCast(art_height))) / 2
+        else 
+            bounds.y + 1;
+            
+        const start_x = if (art_width < content_width)
+            bounds.x + 1 + (content_width - @as(u16, @intCast(art_width))) / 2
+        else
+            bounds.x + 1;
+        
+        // Draw Patrick with animated colors, clipping to panel bounds
         for (patrick_art, 0..) |line, i| {
             const line_y = start_y + @as(u16, @intCast(i));
+            
+            // Skip lines outside panel
+            if (line_y < bounds.y + 1) continue;
             if (line_y >= bounds.y + bounds.height - 1) break;
             
-            for (line, 0..) |char, j| {
-                const char_x = start_x + @as(u16, @intCast(j));
-                if (char_x >= bounds.x + bounds.width - 1) break;
+            // Use UTF-8 iterator to properly handle Unicode characters
+            var utf8_iter = (try std.unicode.Utf8View.init(line)).iterator();
+            var visual_col: u16 = 0;
+            
+            while (utf8_iter.nextCodepoint()) |codepoint| {
+                const char_x = start_x + visual_col;
                 
-                if (char != ' ') {
-                    const color = colors[(self.frame + i) % colors.len];
-                    screen.setCell(char_x, line_y, .{
-                        .char = @as(u21, @intCast(char)),
-                        .fg = color,
-                        .bg = bg_color,
-                        .style = .{},
-                    });
+                // Skip characters outside panel
+                if (char_x >= bounds.x + 1 and char_x < bounds.x + bounds.width - 1 and
+                    line_y >= bounds.y + 1 and line_y < bounds.y + bounds.height - 1) {
+                    if (codepoint != ' ') {
+                        const color = colors[(self.frame + i) % colors.len];
+                        screen.setCell(char_x, line_y, .{
+                            .char = codepoint,
+                            .fg = color,
+                            .bg = bg_color,
+                            .style = .{},
+                        });
+                    }
                 }
+                visual_col += 1;
             }
         }
         
-        // Add a message at the bottom
+        // Add a small message at the bottom if there's room
         const messages = [_][]const u8{
             "Is mayonnaise an instrument?",
             "I can't see my forehead!",
-            "The inner machinations of my mind are an enigma",
             "Finland!",
             "I love you",
         };
-        const message = messages[self.frame % messages.len];
-        if (bounds.height > art_height + 4) {
+        if (bounds.height > art_height + 3) {
+            const message = messages[self.frame % messages.len];
             const msg_x = bounds.x + (bounds.width - @as(u16, @intCast(message.len))) / 2;
-            const msg_y = bounds.y + bounds.height - 3;
+            const msg_y = bounds.y + bounds.height - 2;
             screen.writeText(msg_x, msg_y, message, colors[self.frame], bg_color, .{ .italic = true });
         }
     }

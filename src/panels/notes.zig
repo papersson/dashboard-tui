@@ -15,6 +15,7 @@ pub const NotesPanel = struct {
     cursor_col: usize = 0,
     scroll_offset: usize = 0,
     insert_mode: bool = false,
+    last_command: u8 = 0,
     
     pub fn init(allocator: std.mem.Allocator) !NotesPanel {
         var content = std.ArrayList(u8).init(allocator);
@@ -82,22 +83,46 @@ pub const NotesPanel = struct {
                         .char => |c| switch (c) {
                             'i' => {
                                 self.insert_mode = true;
+                                self.last_command = 0;
                                 return true;
                             },
                             'h' => {
                                 self.moveCursorLeft();
+                                self.last_command = 0;
                                 return true;
                             },
                             'j' => {
                                 self.moveCursorDown();
+                                self.last_command = 0;
                                 return true;
                             },
                             'k' => {
                                 self.moveCursorUp();
+                                self.last_command = 0;
                                 return true;
                             },
                             'l' => {
                                 self.moveCursorRight();
+                                self.last_command = 0;
+                                return true;
+                            },
+                            'e' => {
+                                self.moveToEndOfWord();
+                                self.last_command = 0;
+                                return true;
+                            },
+                            'b' => {
+                                self.moveToBeginningOfWord();
+                                self.last_command = 0;
+                                return true;
+                            },
+                            'd' => {
+                                if (self.last_command == 'd') {
+                                    self.deleteLine();
+                                    self.last_command = 0;
+                                } else {
+                                    self.last_command = 'd';
+                                }
                                 return true;
                             },
                             else => {},
@@ -314,5 +339,92 @@ pub const NotesPanel = struct {
                 self.cursor_col = @min(self.cursor_col, self.lines.items[self.cursor_line].len);
             }
         }
+    }
+    
+    fn moveToEndOfWord(self: *NotesPanel) void {
+        if (self.cursor_line >= self.lines.items.len) return;
+        const line = self.lines.items[self.cursor_line];
+        
+        // Skip current word
+        while (self.cursor_col < line.len and line[self.cursor_col] != ' ') {
+            self.cursor_col += 1;
+        }
+        
+        // Skip spaces
+        while (self.cursor_col < line.len and line[self.cursor_col] == ' ') {
+            self.cursor_col += 1;
+        }
+        
+        // Move to end of next word
+        while (self.cursor_col < line.len and line[self.cursor_col] != ' ') {
+            self.cursor_col += 1;
+        }
+        
+        // Go back one character to be on the last char of the word
+        if (self.cursor_col > 0 and (self.cursor_col == line.len or line[self.cursor_col] == ' ')) {
+            self.cursor_col -= 1;
+        }
+    }
+    
+    fn moveToBeginningOfWord(self: *NotesPanel) void {
+        if (self.cursor_line >= self.lines.items.len) return;
+        const line = self.lines.items[self.cursor_line];
+        
+        if (self.cursor_col == 0) {
+            // Move to previous line
+            if (self.cursor_line > 0) {
+                self.cursor_line -= 1;
+                self.cursor_col = if (self.cursor_line < self.lines.items.len) self.lines.items[self.cursor_line].len else 0;
+            }
+            return;
+        }
+        
+        // Move back to start of current word or previous word
+        self.cursor_col -= 1;
+        
+        // Skip spaces backwards
+        while (self.cursor_col > 0 and line[self.cursor_col] == ' ') {
+            self.cursor_col -= 1;
+        }
+        
+        // Move to beginning of word
+        while (self.cursor_col > 0 and line[self.cursor_col - 1] != ' ') {
+            self.cursor_col -= 1;
+        }
+    }
+    
+    fn deleteLine(self: *NotesPanel) void {
+        if (self.lines.items.len == 0) return;
+        
+        // Calculate start and end positions in content
+        var start_pos: usize = 0;
+        for (self.lines.items[0..self.cursor_line]) |line| {
+            start_pos += line.len + 1; // +1 for newline
+        }
+        
+        var end_pos = start_pos;
+        if (self.cursor_line < self.lines.items.len) {
+            end_pos += self.lines.items[self.cursor_line].len;
+            if (self.cursor_line < self.lines.items.len - 1) {
+                end_pos += 1; // Include the newline
+            }
+        }
+        
+        // Remove the line from content
+        if (end_pos > start_pos) {
+            var i = end_pos;
+            while (i > start_pos) : (i -= 1) {
+                _ = self.content.orderedRemove(start_pos);
+            }
+        }
+        
+        // Adjust cursor
+        if (self.cursor_line >= self.lines.items.len - 1 and self.cursor_line > 0) {
+            self.cursor_line -= 1;
+        }
+        self.cursor_col = 0;
+        
+        // Update lines
+        self.updateLines();
     }
 };

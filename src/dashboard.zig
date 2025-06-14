@@ -46,8 +46,8 @@ pub const Dashboard = struct {
         // Create a 4-panel layout:
         // First split horizontally to create top and bottom rows
         try layout.splitPanel("todo", .horizontal, "bottom_row", 0.6);
-        // Split the top row (todo) vertically
-        try layout.splitPanel("todo", .vertical, "patrick", 0.7);
+        // Split the top row (todo) vertically - give Patrick more space
+        try layout.splitPanel("todo", .vertical, "patrick", 0.5);
         // Split the bottom row into notes and pomodoro
         // When we split "bottom_row" vertically with ratio 0.5:
         // - The left 50% remains as "bottom_row" 
@@ -198,6 +198,9 @@ pub const Dashboard = struct {
             .width = screen_bounds.width,
             .height = screen_bounds.height - 4, // Header + footer
         };
+        
+        // Fill entire content area with dark background to prevent gaps
+        self.screen.fillRect(content_bounds.x, content_bounds.y, content_bounds.width, content_bounds.height, self.theme.bg);
         
         // Use layout system to render panels
         self.layout.calculate(content_bounds);
